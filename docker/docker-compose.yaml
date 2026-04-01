@@ -1,0 +1,20 @@
+services:
+  eventos-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: eventos-app
+    volumes:
+      # Project source
+      - ..:/home/user/project
+
+      # Framework mounts — set these in docker/.env or your shell environment
+      - ${EVENTOS_PATH:?Set EVENTOS_PATH in .env}:/home/user/EventOS
+      - ${UNITTEST_PATH:?Set UNITTEST_PATH in .env}:/home/user/UnitTest
+
+      # Optional: cross-compiler toolchain
+      # - ${TOOLCHAIN_PATH}:/home/user/toolchain
+    environment:
+      - EVENTOS_PATH=/home/user/EventOS
+      - UNITTEST_PATH=/home/user/UnitTest
+      # - TOOLCHAIN_PATH=/home/user/toolchain
