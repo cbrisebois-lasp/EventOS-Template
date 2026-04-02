@@ -11,5 +11,17 @@
       "mcp__eventos-template__list_tests",
       "mcp__eventos-template__run_coverage"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat .claude/skills/version-control/SKILL.md"
+          }
+        ]
+      }
+    ]
   }
 }
