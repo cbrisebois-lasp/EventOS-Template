@@ -36,7 +36,7 @@ The goal is one logical unit per commit so that reviewers can follow changes fil
 
 ### Commit messages
 
-Every commit message has three parts: a **subject line**, a **description**, and a **Claude Code block**.
+Every commit message has three parts: a **subject line**, a **description**, and an **Agent trailer**.
 
 #### Subject line
 
@@ -51,14 +51,14 @@ Examples:
 
 A brief paragraph (max 200 characters) on the next line after a blank line. It should give additional context about _why_ the change was made or _how_ it works — details that aren't obvious from the diff alone.
 
-#### Claude Code trailer
+#### Agent trailer
 
 End every commit message with a single trailer line recording AI assistance and the model(s) used:
 
 Example:
-- `Claude-Code: claude-opus-4-6`
+- `Agent: claude-opus-4-6`
 
-If multiple models were used, comma-separate them (e.g. `Claude-Code: claude-opus-4-6, claude-sonnet-4-6`).
+If multiple models were used, comma-separate them (e.g. `Agent: claude-opus-4-6, claude-sonnet-4-6`).
 
 #### Full example
 
@@ -68,7 +68,7 @@ Add multi-hop routing support to Route.c
 Enable packets to traverse intermediate nodes by chaining SpW addresses
 in the route table. Needed for the new ground network topology.
 
-Claude-Code: claude-opus-4-6
+Agent: claude-opus-4-6
 ```
 
 ## Collaborative workflow
@@ -125,7 +125,7 @@ When the user asks to validate the commit history (or when finalizing work befor
 2. **No commits on main** — All work is on a feature branch.
 3. **One commit per modified file** — Each pre-existing file appears in exactly one commit, unless it shares a commit with an interdependent file (e.g. a header/source pair).
 4. **New/deleted files batched by directory** — New or deleted files are grouped per directory, not scattered across commits.
-5. **Commit message format** — Each commit has: imperative subject (< 72 chars), description paragraph, and `Claude-Code:` trailer.
+5. **Commit message format** — Each commit has: imperative subject (< 72 chars), description paragraph, and `Agent:` trailer.
 6. **Build order** — Commits are ordered so the repo could theoretically build at each step (dependencies come before dependents).
 7. **No fixup/squash leftovers** — No commit subjects starting with `fixup!` or `squash!`.
 8. **No untracked or uncommitted changes** — Working tree is clean (or any remaining changes are intentionally uncommitted and noted).
