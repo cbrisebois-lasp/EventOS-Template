@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "eventos-template": {
+      "command": "python3",
+      "args": [".claude/mcp/eventos-template.py"]
+    }
+  }
+}

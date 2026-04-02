@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__eventos-template__container_start",
+      "mcp__eventos-template__container_stop",
+      "mcp__eventos-template__container_status",
+      "mcp__eventos-template__container_build",
+      "mcp__eventos-template__container_remove",
+      "mcp__eventos-template__container_exec",
+      "mcp__eventos-template__run_tests",
+      "mcp__eventos-template__list_tests",
+      "mcp__eventos-template__run_coverage"
+    ]
+  }
+}
