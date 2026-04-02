@@ -37,4 +37,6 @@ EventOS and UnitTest are external dependencies, not vendored. They are mounted i
 
 | Skill | Purpose |
 |-------|---------|
+| `/use-container` | Interacting with the Docker container — MCP tools and fallback commands |
+| `/improve-container` | Guidelines for modifying Dockerfile, compose, helper script, and container setup |
 | `/version-control` | Branching, committing, and rebasing rules for this repo |
