@@ -146,6 +146,9 @@ def run_compose(args, timeout=120):
 
 def exec_in_container(cmd, workdir=CONTAINER_WORKDIR, timeout=120):
     """Run a command inside the Docker container and return stdout+stderr."""
+    if not container_is_running():
+        return "Container is not running. Start it with container_start.", 1
+
     full_cmd = COMPOSE_CMD + [
         "exec", "-T", "-u", CONTAINER_USER,
         "-w", workdir,
@@ -165,26 +168,66 @@ def exec_in_container(cmd, workdir=CONTAINER_WORKDIR, timeout=120):
 
 def container_is_running():
     """Check if the container is up."""
-    try:
-        result = subprocess.run(
-            COMPOSE_CMD + ["ps", "-q", CONTAINER_SERVICE],
-            capture_output=True, text=True, timeout=10, env=COMPOSE_ENV
-        )
-        return bool(result.stdout.strip())
-    except Exception:
-        return False
+    output, rc = run_compose(["ps", "-q", CONTAINER_SERVICE], timeout=10)
+    return rc == 0 and bool(output.strip())
 
 
 # ---------------------------------------------------------------------------
-# Container handlers
+# Simple tool dispatch
 # ---------------------------------------------------------------------------
 
-def handle_container_start(args):
-    output, rc = run_compose(["up", "-d", "--build"], timeout=300)
-    if rc == 0:
-        return f"Container started successfully.\n\n{output}"
-    return f"Failed to start container (exit code {rc})\n\n{output}"
+SIMPLE_TOOLS = {
+    "container_start": {
+        "helper": "compose",
+        "args": ["up", "-d", "--build"],
+        "timeout": 300,
+        "success": "Container started successfully.",
+        "failure": "Failed to start container",
+    },
+    "container_build": {
+        "helper": "compose",
+        "args": ["build"],
+        "timeout": 600,
+        "success": "Image built successfully.",
+        "failure": "Build failed",
+    },
+    "container_remove": {
+        "helper": "compose",
+        "args": ["down", "-t", "30", "-v"],
+        "timeout": 60,
+        "success": "Container, network, and volumes removed.",
+        "failure": "Failed to remove",
+    },
+    "build_app": {
+        "helper": "exec",
+        "cmd": "make build",
+        "timeout": 300,
+    },
+    "build_clean": {
+        "helper": "exec",
+        "cmd": "make clean",
+        "timeout": 60,
+    },
+}
 
+
+def handle_simple_tool(tool_name, args):
+    """Generic handler for tools that are a single helper call + formatting."""
+    config = SIMPLE_TOOLS[tool_name]
+    if config["helper"] == "compose":
+        output, rc = run_compose(config["args"], timeout=config["timeout"])
+        if rc == 0:
+            return f"{config['success']}\n\n{output}"
+        return f"{config['failure']} (exit code {rc})\n\n{output}"
+    else:
+        output, rc = exec_in_container(config["cmd"], timeout=config["timeout"])
+        status = "OK" if rc == 0 else "FAILED"
+        return f"[{status}] exit code {rc}\n\n{output}"
+
+
+# ---------------------------------------------------------------------------
+# Custom handlers
+# ---------------------------------------------------------------------------
 
 def handle_container_stop(args):
     if not container_is_running():
@@ -219,27 +262,10 @@ def handle_container_status(args):
         return output
 
 
-def handle_container_build(args):
-    output, rc = run_compose(["build"], timeout=600)
-    if rc == 0:
-        return f"Image built successfully.\n\n{output}"
-    return f"Build failed (exit code {rc})\n\n{output}"
-
-
-def handle_container_remove(args):
-    output, rc = run_compose(["down", "-t", "30", "-v"], timeout=60)
-    if rc == 0:
-        return f"Container, network, and volumes removed.\n\n{output}"
-    return f"Failed to remove (exit code {rc})\n\n{output}"
-
-
 def handle_container_exec(args):
     command = args.get("command")
     if not command:
         return "Error: 'command' parameter is required."
-
-    if not container_is_running():
-        return "Container is not running. Start it with container_start."
 
     workdir = args.get("workdir", CONTAINER_WORKDIR)
     timeout = args.get("timeout", 120)
@@ -249,36 +275,7 @@ def handle_container_exec(args):
     return f"[{status}] exit code {rc}\n\n{output}"
 
 
-# ---------------------------------------------------------------------------
-# Build handlers
-# ---------------------------------------------------------------------------
-
-def handle_build_app(args):
-    if not container_is_running():
-        return "Container is not running. Start it with container_start."
-
-    output, rc = exec_in_container("make build", timeout=300)
-    status = "OK" if rc == 0 else "FAILED"
-    return f"[{status}] exit code {rc}\n\n{output}"
-
-
-def handle_build_clean(args):
-    if not container_is_running():
-        return "Container is not running. Start it with container_start."
-
-    output, rc = exec_in_container("make clean", timeout=60)
-    status = "OK" if rc == 0 else "FAILED"
-    return f"[{status}] exit code {rc}\n\n{output}"
-
-
-# ---------------------------------------------------------------------------
-# Test handlers
-# ---------------------------------------------------------------------------
-
 def handle_run_tests(args):
-    if not container_is_running():
-        return "Container is not running. Start it with: container_start"
-
     target = args.get("target")
     module = args.get("module")
 
@@ -295,9 +292,6 @@ def handle_run_tests(args):
 
 
 def handle_list_tests(args):
-    if not container_is_running():
-        return "Container is not running. Start it with: container_start"
-
     cmd = "cd test && make build > /dev/null 2>&1 && cd build && ctest -N"
     output, rc = exec_in_container(cmd, timeout=120)
     if rc != 0:
@@ -306,9 +300,6 @@ def handle_list_tests(args):
 
 
 def handle_run_coverage(args):
-    if not container_is_running():
-        return "Container is not running. Start it with: container_start"
-
     module = args.get("module")
     if module:
         cmd = f"cd test && MODULE_FILTER={module} make coverage"
@@ -325,14 +316,10 @@ def handle_run_coverage(args):
 # ---------------------------------------------------------------------------
 
 HANDLERS = {
-    "container_start": handle_container_start,
+    **{name: lambda args, n=name: handle_simple_tool(n, args) for name in SIMPLE_TOOLS},
     "container_stop": handle_container_stop,
     "container_status": handle_container_status,
-    "container_build": handle_container_build,
-    "container_remove": handle_container_remove,
     "container_exec": handle_container_exec,
-    "build_app": handle_build_app,
-    "build_clean": handle_build_clean,
     "run_tests": handle_run_tests,
     "list_tests": handle_list_tests,
     "run_coverage": handle_run_coverage,
