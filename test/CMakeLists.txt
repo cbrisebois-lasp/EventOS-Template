@@ -36,6 +36,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/include
     ${EVENTOS_PATH}/app/include
+    ${UNITTEST_PATH}/framework
 )
 
 if(NO_REPORTS)
@@ -52,15 +53,21 @@ include(${UNITTEST_PATH}/cmake/UnitTestDiscovery.cmake)
 
 # List source files that are not expected to have tests
 set(IGNORE_MISSING_TEST_FILES
-    # Add entries here as needed, e.g.:
-    # "Main.c"
-    # "hal/Startup.S"
+    "main.c"
 )
 
-unittest_add_tests(
+set(_ut_args
     APP_SOURCE_DIR  "${CMAKE_CURRENT_SOURCE_DIR}/../app/source"
     TEST_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/source"
     IGNORE_FILES    ${IGNORE_MISSING_TEST_FILES}
-    MODULE_FILTER   "${MODULE_FILTER}"
-    ${VERBOSE_CUSTOM}
 )
+
+if(DEFINED MODULE_FILTER AND NOT "${MODULE_FILTER}" STREQUAL "")
+    list(APPEND _ut_args MODULE_FILTER "${MODULE_FILTER}")
+endif()
+
+if(VERBOSE_CUSTOM)
+    list(APPEND _ut_args VERBOSE)
+endif()
+
+unittest_add_tests(${_ut_args})
