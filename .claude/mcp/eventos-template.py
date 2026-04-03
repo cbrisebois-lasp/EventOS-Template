@@ -76,6 +76,17 @@ TOOLS = [
             "required": ["command"]
         }
     },
+    # --- Build ---
+    {
+        "name": "build_app",
+        "description": "Build the application inside the Docker container.",
+        "inputSchema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "build_clean",
+        "description": "Remove application and test build directories inside the Docker container.",
+        "inputSchema": {"type": "object", "properties": {}}
+    },
     # --- Tests ---
     {
         "name": "run_tests",
@@ -239,6 +250,28 @@ def handle_container_exec(args):
 
 
 # ---------------------------------------------------------------------------
+# Build handlers
+# ---------------------------------------------------------------------------
+
+def handle_build_app(args):
+    if not container_is_running():
+        return "Container is not running. Start it with container_start."
+
+    output, rc = exec_in_container("make build", timeout=300)
+    status = "OK" if rc == 0 else "FAILED"
+    return f"[{status}] exit code {rc}\n\n{output}"
+
+
+def handle_build_clean(args):
+    if not container_is_running():
+        return "Container is not running. Start it with container_start."
+
+    output, rc = exec_in_container("make clean", timeout=60)
+    status = "OK" if rc == 0 else "FAILED"
+    return f"[{status}] exit code {rc}\n\n{output}"
+
+
+# ---------------------------------------------------------------------------
 # Test handlers
 # ---------------------------------------------------------------------------
 
@@ -298,6 +331,8 @@ HANDLERS = {
     "container_build": handle_container_build,
     "container_remove": handle_container_remove,
     "container_exec": handle_container_exec,
+    "build_app": handle_build_app,
+    "build_clean": handle_build_clean,
     "run_tests": handle_run_tests,
     "list_tests": handle_list_tests,
     "run_coverage": handle_run_coverage,
