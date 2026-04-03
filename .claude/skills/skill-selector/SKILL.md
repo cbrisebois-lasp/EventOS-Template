@@ -23,10 +23,14 @@ Before doing any work on the user's request, reason about which skills will be n
 | `/use-container` | User wants to start, stop, or log into the Docker container, or run commands inside it |
 | `/improve-container` | User wants to modify the Dockerfile, docker-compose, helper script, or container setup |
 | `/version-control` | User wants to commit, branch, rebase, or is about to make changes that need version control |
+| `/improve-build-system` | User wants to modify CMakeLists.txt, Makefiles, test discovery, coverage, or build configuration |
+| `/use-build-system` | User wants to build the app, run tests, generate coverage, or clean build artifacts |
+| `/run-tests` | User wants to run unit tests, check test results, or generate coverage |
 
 ## Selection guidelines
 
 - If the task is purely about **using** something (building, testing, running), load the `use-*` skill.
 - If the task is about **modifying** infrastructure (Dockerfile, compose, helper scripts), load the `improve-*` skill.
+- If the task is about **modifying** the build system (CMake, Makefiles, test discovery), load `/improve-build-system`.
 - If the task is about application code (`app/source/`), you may not need any of these skills — use your judgment.
 - Do not load skills that are clearly irrelevant. Fewer is better.
