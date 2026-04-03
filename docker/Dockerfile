@@ -24,7 +24,7 @@ RUN useradd -m ${USERNAME} \
     && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 USER ${USERNAME}
-ARG PROJECT_DIR=project
+ARG PROJECT_DIR
 WORKDIR /home/${USERNAME}/${PROJECT_DIR}
 
 ENTRYPOINT ["sleep", "infinity"]

@@ -4,11 +4,11 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        - PROJECT_DIR=${PROJECT_DIR:-project}
+        - PROJECT_DIR=${PROJECT_DIR}
     container_name: eventos-app
     volumes:
       # Project source
-      - ..:/home/user/${PROJECT_DIR:-project}
+      - ..:/home/user/${PROJECT_DIR}
 
       # Framework mounts — set these in docker/.env or your shell environment
       - ${EVENTOS_PATH:-../../EventOS}:/home/user/EventOS

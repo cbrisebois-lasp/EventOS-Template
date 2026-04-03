@@ -20,7 +20,9 @@ COMPOSE_FILE = os.path.join(PROJECT_ROOT, "docker", "docker-compose.yaml")
 COMPOSE_CMD = ["docker", "compose", "-f", COMPOSE_FILE]
 CONTAINER_SERVICE = "eventos-app"
 CONTAINER_USER = "user"
-CONTAINER_WORKDIR = f"/home/user/{os.environ.get('PROJECT_DIR', 'project')}"
+PROJECT_DIR = os.environ.get("PROJECT_DIR", os.path.basename(os.path.realpath(PROJECT_ROOT)))
+COMPOSE_ENV = {**os.environ, "PROJECT_DIR": PROJECT_DIR}
+CONTAINER_WORKDIR = f"/home/user/{PROJECT_DIR}"
 
 # ---------------------------------------------------------------------------
 # Tool definitions
@@ -120,7 +122,7 @@ def run_compose(args, timeout=120):
     """Run a docker compose command and return stdout+stderr."""
     full_cmd = COMPOSE_CMD + args
     try:
-        result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=timeout, env=COMPOSE_ENV)
         output = result.stdout
         if result.stderr:
             output += "\n" + result.stderr
@@ -139,7 +141,7 @@ def exec_in_container(cmd, workdir=CONTAINER_WORKDIR, timeout=120):
         CONTAINER_SERVICE, "sh", "-c", cmd
     ]
     try:
-        result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=timeout, env=COMPOSE_ENV)
         output = result.stdout
         if result.stderr:
             output += "\n" + result.stderr
@@ -155,7 +157,7 @@ def container_is_running():
     try:
         result = subprocess.run(
             COMPOSE_CMD + ["ps", "-q", CONTAINER_SERVICE],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True, timeout=10, env=COMPOSE_ENV
         )
         return bool(result.stdout.strip())
     except Exception:
