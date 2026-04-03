@@ -26,6 +26,7 @@ Before doing any work on the user's request, reason about which skills will be n
 | `/improve-build-system` | User wants to modify CMakeLists.txt, Makefiles, test discovery, coverage, or build configuration |
 | `/use-build-system` | User wants to build the app, run tests, generate coverage, or clean build artifacts |
 | `/run-tests` | User wants to run unit tests, check test results, or generate coverage |
+| `/audit-tool-server` | User wants to audit, review, or improve the MCP server's structure, helpers, or dispatch patterns |
 
 ## Selection guidelines
 
