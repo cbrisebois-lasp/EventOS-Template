@@ -1,4 +1,5 @@
 .DS_Store
+.vscode
 build
 docker/.env
 /test/assertions.txt
