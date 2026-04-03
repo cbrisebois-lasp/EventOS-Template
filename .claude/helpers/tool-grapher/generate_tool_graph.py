@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Parse the MCP server source and generate a DOT graph of tool-to-helper
-call relationships. Optionally render to SVG via Graphviz.
+call relationships, including helper-to-helper chains and serial call order.
+Optionally render to SVG via Graphviz.
 
 Usage:
     python3 generate_tool_graph.py              # print DOT to stdout
@@ -25,9 +26,64 @@ KNOWN_HELPERS = {
     "container_is_running",
 }
 
+# Maps SIMPLE_TOOLS "helper" field values to the helper function they call
+HELPER_FIELD_MAP = {
+    "compose": "run_compose",
+    "exec": "exec_in_container",
+}
+
+
+def _find_ordered_calls(node, targets):
+    """Walk a function body in source order and return an ordered list of calls to targets."""
+    calls = []
+    for child in ast.walk(node):
+        if isinstance(child, ast.Call):
+            func = child.func
+            name = None
+            if isinstance(func, ast.Name):
+                name = func.id
+            elif isinstance(func, ast.Attribute):
+                name = func.attr
+            if name and name in targets:
+                calls.append((child.lineno, name))
+    calls.sort(key=lambda x: x[0])
+    # Deduplicate consecutive same-name calls (keep order, remove repeats)
+    seen = set()
+    ordered = []
+    for _, name in calls:
+        if name not in seen:
+            seen.add(name)
+            ordered.append(name)
+    return ordered
+
+
+def parse_simple_tools(tree):
+    """Parse SIMPLE_TOOLS dict and return {tool_name: helper_function_name}."""
+    simple = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "SIMPLE_TOOLS":
+                    if isinstance(node.value, ast.Dict):
+                        for key, value in zip(node.value.keys, node.value.values):
+                            if not isinstance(key, ast.Constant) or not isinstance(value, ast.Dict):
+                                continue
+                            tool_name = key.value
+                            for k, v in zip(value.keys, value.values):
+                                if isinstance(k, ast.Constant) and k.value == "helper" and isinstance(v, ast.Constant):
+                                    helper_fn = HELPER_FIELD_MAP.get(v.value)
+                                    if helper_fn:
+                                        simple[tool_name] = helper_fn
+    return simple
+
 
 def parse_call_graph(source_path):
-    """Parse the MCP server and return {tool_name: [called_helpers]}."""
+    """Parse the MCP server and return tool and helper call graphs.
+
+    Returns:
+        tool_calls: {tool_name: [(order, helper_name), ...]}
+        helper_calls: {helper_name: [(order, helper_name), ...]}
+    """
     with open(source_path) as f:
         tree = ast.parse(f.read())
 
@@ -42,30 +98,34 @@ def parse_call_graph(source_path):
                             if isinstance(key, ast.Constant) and isinstance(value, ast.Name):
                                 tool_to_handler[key.value] = value.id
 
-    # For each handler, find which helpers it calls, keyed by tool name
-    tool_to_helpers = {}
+    # Parse SIMPLE_TOOLS for config-driven tools
+    simple_tools = parse_simple_tools(tree)
+
+    # For each handler function, find ordered helper calls
+    tool_calls = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name in tool_to_handler.values():
-            # Find the tool name for this handler
             tool_name = next(t for t, h in tool_to_handler.items() if h == node.name)
-            called = set()
-            for child in ast.walk(node):
-                if isinstance(child, ast.Call):
-                    func = child.func
-                    name = None
-                    if isinstance(func, ast.Name):
-                        name = func.id
-                    elif isinstance(func, ast.Attribute):
-                        name = func.attr
-                    if name and name in KNOWN_HELPERS:
-                        called.add(name)
-            tool_to_helpers[tool_name] = sorted(called)
+            ordered = _find_ordered_calls(node, KNOWN_HELPERS)
+            tool_calls[tool_name] = [(i + 1, name) for i, name in enumerate(ordered)]
 
-    return tool_to_helpers
+    # Add simple tools — each calls handle_simple_tool which delegates to the configured helper
+    for tool_name, helper_fn in simple_tools.items():
+        tool_calls[tool_name] = [(1, helper_fn)]
+
+    # For each helper function, find ordered calls to other helpers
+    helper_calls = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name in KNOWN_HELPERS:
+            ordered = _find_ordered_calls(node, KNOWN_HELPERS - {node.name})
+            if ordered:
+                helper_calls[node.name] = [(i + 1, name) for i, name in enumerate(ordered)]
+
+    return tool_calls, helper_calls
 
 
-def generate_dot(tool_to_helpers):
-    """Generate DOT source from the call graph."""
+def generate_dot(tool_calls, helper_calls):
+    """Generate DOT source from the call graphs."""
     lines = [
         'digraph tool_hierarchy {',
         '    rankdir=LR;',
@@ -79,7 +139,7 @@ def generate_dot(tool_to_helpers):
         '        color="#888888";',
         '        node [shape=box style=filled fillcolor="#4A90D9" fontcolor=white];',
     ]
-    for tool in sorted(tool_to_helpers.keys()):
+    for tool in sorted(tool_calls.keys()):
         lines.append(f'        "{tool}";')
     lines.append('    }')
     lines.append('')
@@ -91,17 +151,30 @@ def generate_dot(tool_to_helpers):
     lines.append('        color="#888888";')
     lines.append('        node [shape=ellipse style=filled fillcolor="#50C878" fontcolor=white];')
     all_helpers = set()
-    for called in tool_to_helpers.values():
-        all_helpers.update(called)
+    for calls in tool_calls.values():
+        all_helpers.update(name for _, name in calls)
+    for calls in helper_calls.values():
+        all_helpers.update(name for _, name in calls)
+    all_helpers.discard("handle_simple_tool")
     for helper in sorted(all_helpers):
         lines.append(f'        "{helper}";')
     lines.append('    }')
     lines.append('')
 
-    lines.append('    // Tool -> Helper edges')
-    for tool, helpers in sorted(tool_to_helpers.items()):
-        for helper in helpers:
-            lines.append(f'    "{tool}" -> "{helper}";')
+    lines.append('    // Tool -> Helper edges (numbered for serial order)')
+    for tool, calls in sorted(tool_calls.items()):
+        for order, helper in calls:
+            if helper == "handle_simple_tool":
+                continue
+            label = f' [label="{order}"]' if len(calls) > 1 else ''
+            lines.append(f'    "{tool}" -> "{helper}"{label};')
+
+    lines.append('')
+    lines.append('    // Helper -> Helper edges (dashed, numbered for serial order)')
+    for helper, calls in sorted(helper_calls.items()):
+        for order, target in calls:
+            label = f' label="{order}"' if len(calls) > 1 else ''
+            lines.append(f'    "{helper}" -> "{target}" [style=dashed{" " + label if label else ""}];')
 
     lines.append('}')
     return '\n'.join(lines)
@@ -113,8 +186,8 @@ def main():
     parser.add_argument("-s", "--source", default=MCP_SERVER, help="MCP server source file")
     args = parser.parse_args()
 
-    tool_to_helpers = parse_call_graph(args.source)
-    dot_source = generate_dot(tool_to_helpers)
+    tool_calls, helper_calls = parse_call_graph(args.source)
+    dot_source = generate_dot(tool_calls, helper_calls)
 
     if not args.output:
         print(dot_source)
