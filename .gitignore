@@ -3,3 +3,4 @@
 build
 docker/.env
 /test/assertions.txt
+__pycache__

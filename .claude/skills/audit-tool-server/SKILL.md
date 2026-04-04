@@ -1,143 +1,136 @@
 ---
 name: audit-tool-server
-description: How to audit the MCP server for structural improvements — duplicate helpers, dispatch patterns, and helper call chains
+description: How to audit the MCP tool server for overlaps that should become shared helpers or lib entries
 user-invocable: true
 ---
 
 # Auditing the MCP Tool Server
 
-Use this skill when a user asks you to audit, review, or improve the structure of the MCP server. The server evolves as tools are added, and its internal patterns (helpers, dispatch, call chains) should be periodically reviewed.
+Use this skill when the user asks you to audit the tool server. The goal is to find overlaps across helpers that should be consolidated into shared helpers or promoted to lib.
 
-## Server location
+## What you are looking for
 
-| File | Role |
-|------|------|
-| `.claude/mcp/eventos-template.py` | MCP server — tool definitions, helpers, handlers, JSON-RPC transport |
-| `.claude/helpers/tool-grapher/generate_tool_graph.py` | Generates a DOT graph of the tool-to-helper call hierarchy |
+As tools are added independently, similar patterns emerge across helpers. An audit identifies these overlaps and recommends where to extract shared code.
+
+| Overlap type | What it looks like | What to do |
+| ------------ | ------------------ | ---------- |
+| **Helper overlap** | Two or more helpers perform the same operation (same subprocess call, same command pattern) | Extract a shared helper that both handlers can call |
+| **Lib candidate** | Two or more helpers duplicate the same low-level utility (e.g. building compose commands, parsing output) | Extract to a shared lib function |
+
+## Server package location
+
+```
+.claude/mcp/
+    eventos_template/
+        lib/          # Shared utilities — subprocess wrapper, paths, result types
+        helpers/      # Operations — own their logic, call run_subprocess directly
+        handlers/     # Tool entry points — one file per tool, call helpers
+        tools.py      # Tool schemas
+        server.py     # JSON-RPC transport
+```
+
+## Key architectural rule
+
+Helpers own their operations directly — they build commands and call `run_subprocess` from lib. Lib only contains utilities that are genuinely shared across multiple helpers. If only one helper uses something, it belongs in the helper, not lib.
 
 ## Audit process
 
-### 1. Generate the call graph
+### Step 1: Read all helpers
 
-Run the grapher to get the current tool hierarchy:
+Read every file in `helpers/`. For each helper function, note:
 
-```bash
-python3 .claude/helpers/tool-grapher/generate_tool_graph.py
-```
+- **Name** and **file**
+- **What it does** — the subprocess command it builds and runs
+- **Arguments** it accepts
+- **What it logs** (step names and details)
+- **What lib imports** it uses (paths, subprocess, result)
 
-This outputs DOT source showing:
-- **Tool -> Helper edges** with numbered labels for serial call order
-- **Helper -> Helper edges** (dashed) showing internal chains
-- **Simple tools** resolved from the `SIMPLE_TOOLS` config dict
+### Step 2: Read all handlers
 
-Render to SVG for visual inspection if Graphviz is available:
+Read every file in `handlers/` (one per tool). For each handler, note:
 
-```bash
-python3 .claude/helpers/tool-grapher/generate_tool_graph.py -o graph.svg
-```
+- **Which helpers** it calls and in what order
+- **Parameter extraction** logic (what it pulls from `args`)
+- **Any inline logic** that isn't delegated to a helper (this is a smell — handlers should only call helpers)
 
-### 2. Read the server and identify patterns
+### Step 3: Identify overlaps
 
-Read the full server file and categorize every tool handler into one of:
+Compare your notes and look for the following patterns:
 
-| Category | Description | Current example |
-|----------|-------------|-----------------|
-| **Simple (config-driven)** | Single helper call + output formatting. Defined in `SIMPLE_TOOLS` dict, dispatched by `handle_simple_tool()`. | `build_app`, `container_start` |
-| **Custom handler** | Unique logic that can't be expressed as config (branching, parameter extraction, fallback chains). Defined as a standalone `handle_*()` function. | `run_tests`, `container_status` |
+#### Duplicate operations across helpers
 
-### 3. Check for issues
+Two or more helpers that build the same kind of subprocess command with similar arguments. This means a shared helper should be extracted.
 
-Look for the following problems, in priority order:
+**Example:** If two helpers both build `COMPOSE_CMD + ["exec", "-T", "-u", CONTAINER_USER, ...]` with slightly different commands, a shared `execute_in_container` helper should handle this.
 
-#### Duplicate helper logic
+#### Repeated utility patterns
 
-Multiple helpers doing the same thing with different code paths. Signs:
-- Raw `subprocess.run()` calls outside of `run_compose()` or `exec_in_container()`
-- Multiple functions checking container status independently
-- Copy-pasted error handling or output formatting
+A low-level pattern that appears in multiple helpers but isn't captured in lib. This is a candidate for a new lib function.
 
-**Resolution**: Converge into a single helper. Callers should use the helper, not reimplement it.
+**Example:** If several helpers all parse JSON output from compose commands with the same error handling, extract a `parse_compose_json()` lib function.
 
-#### Missing helper serialization
+#### Handlers with inline logic
 
-A tool handler manually calling a precondition check before calling another helper, when the helper itself should enforce the precondition. Signs:
-- Multiple handlers with identical guard patterns (e.g., `if not container_is_running(): return ...`)
-- A helper that assumes state without verifying it
+A handler that contains logic beyond parameter extraction, helper calls, and failure formatting. Any conditional logic, string building, or data transformation in a handler should move into a helper.
 
-**Resolution**: Move the precondition into the helper so callers don't need to repeat it.
+#### Helpers that could be parameterized
 
-#### Handlers that should be config-driven
+Two helpers that do the same thing with different arguments. If the structure is identical except for a parameter, one parameterized helper could replace both.
 
-A handler function whose body is just "call one helper, format the output." Signs:
-- Handler body is 3-5 lines
-- No branching on input parameters
-- Output formatting matches an existing pattern (OK/FAILED or success/failure message)
+**Example:** If `build_app()` runs `make build` and `clean_build()` runs `make clean` with identical structure, a shared `run_make(target)` helper could serve both.
 
-**Resolution**: Add an entry to `SIMPLE_TOOLS` and delete the handler function.
+#### Unused lib functions
 
-#### Handlers that outgrew their config entry
+A lib function that no helper imports. Either remove it, or check if helpers are reimplementing its logic inline.
 
-A `SIMPLE_TOOLS` entry that now needs conditional logic, parameter extraction, or multiple helper calls. Signs:
-- The tool's requirements changed and a simple config entry can no longer express them
+### Step 4: Assess each overlap
 
-**Resolution**: Promote to a custom handler function.
+Not every overlap is worth fixing. For each one, consider:
 
-### 4. Check the grapher itself
+- **How many places** share the pattern? (2 is borderline, 3+ is clear)
+- **Is the shared code stable** or likely to diverge? (If the two uses will evolve differently, don't merge them)
+- **Does extracting it simplify the callers?** (If the shared function needs many parameters to handle all cases, it may be worse than the duplication)
 
-If the server's dispatch patterns changed (e.g., new config dict, new helper, renamed function), verify the grapher still produces an accurate graph:
+### Step 5: Present findings
 
-- **`KNOWN_HELPERS`** in the grapher must list all helper functions
-- **`HELPER_FIELD_MAP`** must map `SIMPLE_TOOLS` `"helper"` field values to function names
-- **`parse_simple_tools()`** must match the structure of the `SIMPLE_TOOLS` dict
+Present the audit as a report:
 
-Run the grapher after any server changes and compare the output to the actual code.
+#### Overlap inventory
 
-## Current server architecture
+For each overlap found, describe:
 
-### Helpers (call chain)
+- **What**: The duplicated pattern
+- **Where**: Which files and functions contain it
+- **Recommendation**: Extract to shared helper, extract to lib, or leave as-is (with reasoning)
 
-```
-run_compose(args, timeout)          # Runs any docker compose command
-  ^
-  |
-container_is_running()              # Bool check via run_compose(["ps", "-q", ...])
-  ^
-  |
-exec_in_container(cmd, workdir, timeout)  # Checks container_is_running(), then runs compose exec
-```
-
-All container interaction flows through `run_compose()` at the bottom of the chain. `exec_in_container()` enforces the running precondition internally — callers do not need to check.
-
-### Dispatch pattern
-
-```
-SIMPLE_TOOLS dict  -->  handle_simple_tool()  -->  run_compose / exec_in_container
-Custom handlers    -->  handle_*() functions   -->  run_compose / exec_in_container / container_is_running
-```
-
-The `HANDLERS` dict merges both: simple tools generate lambda entries, custom handlers are referenced directly.
-
-### Design principles
-
-- **One code path per concern**: Container status checking, command execution, and compose invocation each live in exactly one helper.
-- **Helpers enforce their own preconditions**: `exec_in_container` checks `container_is_running` internally. Callers trust the helper.
-- **Config over code for simple tools**: If a tool is just "call helper, format output," it belongs in `SIMPLE_TOOLS`, not a function.
-- **Custom handlers for branching logic**: If a tool needs conditionals, parameter extraction, or multi-step flows, it gets its own function.
-
-## Output
-
-Present audit findings as a checklist:
+#### Summary checklist
 
 ```
 ## Tool server audit
 
-- [x] No duplicate helper logic
-- [ ] Missing serialization: `handle_foo` checks `container_is_running()` before `exec_in_container()`
-- [x] All simple handlers are config-driven
-- [x] No custom handlers that should be config entries
-- [x] Grapher matches server structure
+### Helper overlaps
+- [ ] <description> — <files involved> — <recommendation>
 
-### Recommendations
-1. Move the running check from `handle_foo` into `exec_in_container`
-2. ...
+### Lib candidates
+- [ ] <description> — <files involved> — <recommendation>
+
+### Handler inline logic
+- [ ] <description> — <handler> — <recommendation>
+
+### Unused lib functions
+- [ ] <function name> — <recommendation>
+
+### No issues found
+- [x] All helpers perform distinct operations
+- [x] No handlers contain inline logic
+- [x] All lib functions are used by multiple helpers
 ```
+
+Mark items as `[x]` if no issues were found in that category.
+
+## What NOT to do during an audit
+
+- **Do not make changes** — the audit produces a report, not code modifications
+- **Do not reorganize file structure** — the audit is about code overlaps within the existing structure
+- **Do not evaluate tool schemas or descriptions** — that is a separate concern
+- **Do not assess the transport layer** (`server.py`) — it is not part of the tool architecture

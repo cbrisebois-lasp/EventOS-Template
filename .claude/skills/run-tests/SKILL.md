@@ -1,22 +1,20 @@
 ---
 name: run-tests
-description: How to run unit tests — all tests, by module, by target, or with coverage
+description: How to run unit tests — all tests or with coverage
 user-invocable: true
 ---
 
 # Running Tests
 
-All tests run inside the Docker container. The container must be running — check with `container_status` and start with `container_start` if needed.
+All tests run inside the Docker container. The container must be running — start with `container_start` if needed.
 
 ## MCP tools
 
-| Goal | MCP Tool | Parameters |
-|------|----------|------------|
-| Run all tests | `run_tests` | — |
-| Run tests for one module | `run_tests` | `module` (e.g. `"sample"`) |
-| Run a single test target | `run_tests` | `target` (e.g. `"sample_Init_c_exe"`) |
-| List available test targets | `list_tests` | — |
-| Run tests with coverage report | `run_coverage` | `module` (optional) |
+| Goal | MCP Tool |
+|------|----------|
+| Build and run all tests | `run_tests` |
+| List available test targets | `list_tests` |
+| Run tests with coverage report | `run_coverage` |
 
 ## Test target naming
 
@@ -42,12 +40,14 @@ Each test target is a single executable containing multiple assertions. CTest re
 - **100% passed** — all good
 - **FAILED** — read the output for the failing assertion, fix the source or test, re-run
 
-## Fallback
+## Advanced usage
 
-If MCP tools are not connected:
+For operations beyond what the MCP tools provide (e.g. running a single target, filtering by module), use the build system directly inside the container via the helper script or docker compose exec:
 
-```
-container_exec command="make test"                                    # all tests
-container_exec command="cd test && MODULE_FILTER=sample make test"    # by module
-container_exec command="cd test && make coverage"                     # with coverage
+```bash
+# Run tests filtered by module
+cd test && MODULE_FILTER=sample make test
+
+# Run a single test target
+cd test && make build && cd build && ctest -R sample_Init_c_exe --output-on-failure
 ```

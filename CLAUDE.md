@@ -57,4 +57,7 @@ Key EventOS terms used throughout the codebase:
 | `/improve-build-system` | Modifying CMake, Makefiles, test discovery, coverage, or build configuration |
 | `/use-build-system` | Building the app, running tests, generating coverage, or cleaning build artifacts |
 | `/run-tests` | Running unit tests, checking results, or generating coverage |
-| `/audit-tool-server` | Auditing the MCP server structure — duplicate helpers, dispatch patterns, and call chains |
+| `/improve-tool-server` | Architecture and guidelines for modifying, improving, or extending the MCP tool server |
+| `/add-new-tool` | Step-by-step guide for adding a new MCP tool to the server |
+| `/audit-tool-server` | Audit the tool server for overlaps that should become shared helpers or lib functions |
+| `/create-skill` | How to create a new skill — structure, conventions, and rules |
