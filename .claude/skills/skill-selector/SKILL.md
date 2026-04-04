@@ -26,6 +26,10 @@ Before doing any work on the user's request, reason about which skills will be n
 | `/improve-build-system` | User wants to modify CMakeLists.txt, Makefiles, test discovery, coverage, or build configuration |
 | `/use-build-system` | User wants to build the app, run tests, generate coverage, or clean build artifacts |
 | `/run-tests` | User wants to run unit tests, check test results, or generate coverage |
+| `/improve-tool-server` | User wants to modify, improve, or extend the MCP tool server's architecture, tools, or internal structure |
+| `/add-new-tool` | User wants to add a new tool to the MCP server |
+| `/audit-tool-server` | User wants to audit the tool server for overlaps, duplicated patterns, or consolidation opportunities |
+| `/create-skill` | User wants to create a new skill for the project |
 
 ## Selection guidelines
 

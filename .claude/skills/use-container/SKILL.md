@@ -24,24 +24,22 @@ Use these MCP tools for all container interactions. They handle error reporting 
 
 ### Container lifecycle
 
-| Goal | MCP Tool | Notes |
-|------|----------|-------|
-| Start the container | `container_start` | Builds the image if needed |
-| Stop the container | `container_stop` | |
-| Check if container is running | `container_status` | Returns: running, stopped, or not created |
-| Rebuild the Docker image | `container_build` | Use after Dockerfile changes |
-| Remove container and volumes | `container_remove` | Destructive — removes all container data |
+| Goal | MCP Tool |
+|------|----------|
+| Start the container | `container_start` |
+| Stop the container | `container_stop` |
+| Rebuild the Docker image | `container_build` |
+| Remove container and volumes | `container_remove` |
 
-### Running commands inside the container
+### Build and test
 
-| Goal | MCP Tool | Parameters |
-|------|----------|------------|
-| Run a shell command | `container_exec` | `command` (required), `workdir`, `timeout` |
-| Build and run tests | `run_tests` | `module`, `target` (both optional) |
-| List available test targets | `list_tests` | |
-| Run tests with coverage report | `run_coverage` | `module` (optional) |
-
-Use `container_exec` for any command that needs to run inside the container (e.g. `make build`, `cmake` invocations, installing packages).
+| Goal | MCP Tool |
+|------|----------|
+| Build the application | `build_app` |
+| Clean build artifacts | `build_clean` |
+| Build and run all tests | `run_tests` |
+| List available test targets | `list_tests` |
+| Run tests with coverage report | `run_coverage` |
 
 ## Fallback: helper script
 
