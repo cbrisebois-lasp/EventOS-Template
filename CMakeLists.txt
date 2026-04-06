@@ -27,7 +27,7 @@ endif()
 # ---------------------------------------------------------------------------
 # Hook the frameworks
 # ---------------------------------------------------------------------------
-add_subdirectory(${EVENTOS_PATH} ${CMAKE_BINARY_DIR}/eventos)
+add_subdirectory(cmake/frameworks/eventos ${CMAKE_BINARY_DIR}/eventos)
 
 # ---------------------------------------------------------------------------
 # Application target
