@@ -21,78 +21,167 @@ git clone <unittest-repo-url> UnitTest
 
 ### 2. Configure environment
 
+If EventOS and UnitTest are cloned next to you project, you can skip this step. Only deplay .env if EventOS or UnitTest are maintained at a custom path.
+
 ```bash
 cd my-project/docker
 cp .env.example .env
 ```
 
-Edit `docker/.env` to point at your local clones:
+Edit `docker/.env` to point at your clones:
 
-```
+```bash
 EVENTOS_PATH=/absolute/path/to/EventOS
 UNITTEST_PATH=/absolute/path/to/UnitTest
 ```
 
-### 3. Start the container
+### 3a. Build the container
 
 ```bash
-docker compose -f docker/docker-compose.yaml up -d --build
+cd my-project/docker
+./docker_env.sh build
 ```
+
+### 3b. Use the container
+
+```bash
+cd my-project/docker
+./docker_env.sh start
+./docker_env.sh login
+```
+
+Run ```./docker_env.sh help``` to see other CLI operations.
 
 ### 4. Build and test
 
 ```bash
-# Run tests (host compiler, inside container)
-docker compose -f docker/docker-compose.yaml exec -u user eventos-app make test
+# Build application with the native (host) compiler
+make build
 
-# Build application (requires a toolchain — see below)
-docker compose -f docker/docker-compose.yaml exec -u user eventos-app make build
+# Build application with a cross-compiler (see "Getting a Cross-Compiler into the Build")
+make cross
+
+# Run unit tests (always uses the host compiler)
+make test
 ```
 
 ## Getting a Cross-Compiler into the Build
 
-The template is compiler-agnostic. You have three options:
+By default, the container uses the host `gcc` for building and testing. To cross-compile for an embedded target, you need to provide a cross-compiler and a CMake toolchain file. There are two approaches — both end with `make cross`.
 
-### Option 1: Install in the Docker image
+### Naming the cross target
 
-Add the toolchain to `docker/Dockerfile`:
-
-```dockerfile
-RUN apt-get update && apt-get install -y gcc-riscv64-unknown-elf
-```
-
-### Option 2: Mount a local toolchain
-
-Set `TOOLCHAIN_PATH` in `docker/.env` and uncomment the volume mount in `docker/docker-compose.yaml`:
-
-```yaml
-volumes:
-  - ${TOOLCHAIN_PATH}:/home/user/toolchain
-environment:
-  - TOOLCHAIN_PATH=/home/user/toolchain
-```
-
-Then pass the toolchain file to CMake:
+The cross-compile target defaults to `cross`, but you can rename it by setting the `CROSS_TARGET` environment variable. For example, to use `make RV32IMAF` instead of `make cross`:
 
 ```bash
-cmake -DCMAKE_TOOLCHAIN_FILE=cmake/my-toolchain.cmake ..
+export CROSS_TARGET=RV32IMAF
 ```
 
-### Option 3: System install (no container)
+The build output goes to `build-<target>/` (e.g. `build-RV32IMAF/`), keeping it separate from the native `build/` directory.
 
-If building outside Docker, ensure the cross-compiler is on your `$PATH` and pass a toolchain file:
+### Option 1: Install the toolchain in the Docker image
 
-```bash
-export EVENTOS_PATH=/path/to/EventOS
-export UNITTEST_PATH=/path/to/UnitTest
-mkdir build && cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/my-toolchain.cmake ..
-ninja
-```
+The toolchain is installed once when the image is built and cached in the Docker layer. Anyone who builds the image gets the right compiler automatically.
+
+1. **Add the toolchain to `docker/Dockerfile`.**
+   Add a `RUN` command after the existing `apt-get install` block. For example, for ARM Cortex-M:
+
+   ```dockerfile
+   RUN apt-get update && apt-get install -y gcc-arm-none-eabi
+   ```
+
+   Or for RISC-V:
+
+   ```dockerfile
+   RUN apt-get update && apt-get install -y gcc-riscv64-unknown-elf
+   ```
+
+   If your toolchain is not available as a package, download and extract it instead:
+
+   ```dockerfile
+   RUN wget -qO- https://example.com/my-toolchain.tar.gz | tar xz -C /opt/toolchain
+   ENV PATH="/opt/toolchain/bin:${PATH}"
+   ```
+
+2. **Rebuild the Docker image.**
+
+   ```bash
+   cd docker
+   ./docker_env.sh build
+   ```
+
+3. **Create `cmake/toolchain.cmake`.**
+   Copy the example and customize it for your target:
+
+   ```bash
+   cp cmake/toolchain-example.cmake cmake/toolchain.cmake
+   ```
+
+   Edit `cmake/toolchain.cmake` to set the correct compiler prefix, architecture, and flags.
+
+4. **Build with `make cross`.**
+
+   ```bash
+   make cross
+   ```
+
+### Option 2: Mount a pre-compiled toolchain from the host
+
+The toolchain lives on your host machine and is mounted into the container at runtime. This is more flexible — you can swap toolchains without rebuilding the image.
+
+1. **Set `TOOLCHAIN_PATH` in `docker/.env`.**
+   Point it at your local toolchain install:
+
+   ```bash
+   cd docker
+   cp .env.example .env
+   ```
+
+   Edit `docker/.env`:
+
+   ```bash
+   TOOLCHAIN_PATH=/absolute/path/to/your/toolchain
+   ```
+
+2. **Uncomment the toolchain volume mount in `docker/docker-compose.yaml`.**
+   Under the `volumes:` section, uncomment:
+
+   ```yaml
+   - ${TOOLCHAIN_PATH}:/home/user/toolchain
+   ```
+
+   And under the `environment:` section, uncomment:
+
+   ```yaml
+   - TOOLCHAIN_PATH=/home/user/toolchain
+   ```
+
+3. **Restart the container** to pick up the new mount:
+
+   ```bash
+   cd docker
+   ./docker_env.sh stop
+   ./docker_env.sh start
+   ```
+
+4. **Create `cmake/toolchain.cmake`.**
+   Copy the example and customize it for your target:
+
+   ```bash
+   cp cmake/toolchain-example.cmake cmake/toolchain.cmake
+   ```
+
+   Edit `cmake/toolchain.cmake` to set the correct compiler prefix, architecture, and flags. The `TOOLCHAIN_PATH` environment variable will resolve to `/home/user/toolchain` inside the container.
+
+5. **Build with `make cross`.**
+
+   ```bash
+   make cross
+   ```
 
 ## Project Structure
 
-```
+```bash
 app/
   include/        Your public headers
   source/         Your application sources (auto-discovered)
