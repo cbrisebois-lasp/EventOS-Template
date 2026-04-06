@@ -20,6 +20,19 @@ This skill defines the version control workflow for TP-GSE. The [Rules](#rules) 
 - Before opening a PR or finalizing work, **rebase the branch against `main`** (`git rebase main`).
 - When pushing a rebased branch, always use `git push --force-with-lease`. Never use `--force`.
 
+### Merging
+
+- **Always rebase before merging.** Other agents or contributors may have pushed to the target branch since you branched. Before merging a feature branch into any target branch (e.g. `develop`, `main`), rebase the feature branch against the target:
+
+  ```bash
+  git checkout <feature-branch>
+  git rebase <target-branch>
+  git checkout <target-branch>
+  git merge <feature-branch>
+  ```
+
+- This applies to every merge, even when you believe the target has not changed. Do not skip the rebase step.
+
 ### Commit strategy
 
 The goal is one logical unit per commit so that reviewers can follow changes file-by-file.
@@ -178,6 +191,7 @@ back into the original commit via fixup.
 3. ... make changes (collaborative workflow above) ...
 4. Stage and commit per the rules above
 5. Validate commit history
-6. git rebase main
-7. Push / open PR
+6. git rebase <target-branch>  (always, even if you think nothing changed)
+7. git checkout <target-branch> && git merge <branch-name>
+8. Push / open PR
 ```
