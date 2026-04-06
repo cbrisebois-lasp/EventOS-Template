@@ -31,7 +31,13 @@ endif()
 set(BASE_WARN_FLAGS "-Wall -Wno-int-conversion -Wno-pointer-to-int-cast -Wno-unknown-pragmas -Wno-multistatement-macros")
 set(CMAKE_C_STANDARD 11)
 
-# Include paths: test overrides first, then app headers, then eventOS headers
+# ---------------------------------------------------------------------------
+# Hook the frameworks
+# ---------------------------------------------------------------------------
+# Only UnitTest is needed for tests — EventOS is mocked via test/include overrides.
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/frameworks/unittest ${CMAKE_BINARY_DIR}/unittest)
+
+# Include paths: test overrides first, then app headers, then framework headers
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/include
@@ -49,7 +55,6 @@ endif()
 # ---------------------------------------------------------------------------
 # Auto-discover tests using UnitTest framework
 # ---------------------------------------------------------------------------
-include(${UNITTEST_PATH}/cmake/UnitTestDiscovery.cmake)
 
 # List source files that are not expected to have tests
 set(IGNORE_MISSING_TEST_FILES
