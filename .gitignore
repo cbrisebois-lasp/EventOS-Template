@@ -1,6 +1,8 @@
 .DS_Store
 .vscode
 build
+build-*
+cmake/toolchain.cmake
 docker/.env
 /test/assertions.txt
 __pycache__
