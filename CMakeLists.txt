@@ -29,6 +29,12 @@ endif()
 # ---------------------------------------------------------------------------
 add_subdirectory(cmake/frameworks/eventos ${CMAKE_BINARY_DIR}/eventos)
 
+# Host-only POSIX platform port (HAL critical sections + weak hook defaults).
+# Cross-compile builds must supply their own port targeting the chosen MCU.
+if(NOT CMAKE_CROSSCOMPILING)
+    add_subdirectory(cmake/frameworks/posix ${CMAKE_BINARY_DIR}/posix)
+endif()
+
 # ---------------------------------------------------------------------------
 # Application target
 # ---------------------------------------------------------------------------
@@ -44,8 +50,14 @@ target_include_directories(${PROJECT_NAME}.elf PRIVATE
     ${CMAKE_SOURCE_DIR}/app/include
 )
 
-# Link against the eventOS library — this also pulls in eventOS public headers
-target_link_libraries(${PROJECT_NAME}.elf PRIVATE eventos)
+# Link against the eventOS library — this also pulls in eventOS public headers.
+# On host builds the POSIX port supplies the HAL; cross-compile builds must add
+# their own platform port target via target_link_libraries.
+if(NOT CMAKE_CROSSCOMPILING)
+    target_link_libraries(${PROJECT_NAME}.elf PRIVATE eventos-posix)
+else()
+    target_link_libraries(${PROJECT_NAME}.elf PRIVATE eventos)
+endif()
 
 # ---------------------------------------------------------------------------
 # Toolchain file (optional, for cross-compilation)
