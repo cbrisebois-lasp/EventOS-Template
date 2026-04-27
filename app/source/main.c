@@ -5,6 +5,6 @@ int main(void)
     os_Init();
 
     while (1) {
-        os_ExecNextAction();
+        os_Exec();
     }
 }
